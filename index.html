@@ -144,6 +144,54 @@ body {
 		</div>
 
 		<script>
+// Nine Scrolls build 12.2 - audio wake-up for iOS Safari (run before the engine).
+// iPhone only lets a page start Web Audio inside a touchEND / click, and it pauses
+// ("suspended" / "interrupted") the audio again after calls, notifications, the
+// lock screen or switching apps. Godot asks once, during touchstart, which iPhone
+// ignores, so sound could stay off for a long time. We keep the engine's
+// AudioContext and wake it on every touchend / click / key and whenever the page
+// comes back, until it is running.
+(function () {
+	const Base = window.AudioContext || window.webkitAudioContext;
+	if (!Base) { return; }
+	const ctxs = [];
+	const Wrapped = function (opts) {
+		const c = new Base(opts);
+		ctxs.push(c);
+		return c;
+	};
+	Wrapped.prototype = Base.prototype;
+	window.AudioContext = Wrapped;
+	if (window.webkitAudioContext) { window.webkitAudioContext = Wrapped; }
+	const wake = function () {
+		for (let i = 0; i < ctxs.length; i++) {
+			const c = ctxs[i];
+			if (c.state === 'running' || c.state === 'closed') { continue; }
+			try {
+				c.resume();
+				// A one-sample silent buffer started inside the gesture is what
+				// actually unlocks output on older iOS versions.
+				const b = c.createBuffer(1, 1, c.sampleRate);
+				const s = c.createBufferSource();
+				s.buffer = b;
+				s.connect(c.destination);
+				s.start(0);
+			} catch (err) {}
+		}
+	};
+	const o = { capture: true, passive: true };
+	window.addEventListener('touchend', wake, o);
+	window.addEventListener('click', wake, o);
+	window.addEventListener('keydown', wake, o);
+	window.addEventListener('pageshow', wake);
+	window.addEventListener('focus', wake);
+	document.addEventListener('visibilitychange', function () {
+		if (document.visibilityState === 'visible') { wake(); }
+	});
+	window.nsAudioState = function () { return ctxs.length ? ctxs[0].state : 'none'; };
+}());
+		</script>
+		<script>
 // Nine Scrolls build 9 - touch glide guards for iOS Safari (run before the engine).
 (function () {
 	const stop = function (e) { if (e.cancelable) { e.preventDefault(); } };
@@ -199,7 +247,7 @@ body {
 		</script>
 		<script src="index.js"></script>
 		<script>
-const GODOT_CONFIG = {"mainPack":"index-b112.pck","args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":false,"executable":"index","experimentalVK":false,"fileSizes":{"index-b112.pck":9586148,"index.wasm":39514754},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
+const GODOT_CONFIG = {"mainPack":"index-b300.pck","args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":false,"executable":"index","experimentalVK":false,"fileSizes":{"index-b300.pck":19489320,"index.wasm":39514754},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
 const GODOT_THREADS_ENABLED = false;
 const engine = new Engine(GODOT_CONFIG);
 
